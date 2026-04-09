@@ -1,0 +1,124 @@
+# 🗂️ n8n Employee Attendance Tracker
+
+An automated employee attendance tracking system built with n8n. Monitors a Google Sheets spreadsheet in real-time, sends instant alerts via Telegram and Gmail, and delivers a daily summary report every morning.
+
+---
+
+## ✨ Features
+
+- **Real-time monitoring** — triggers instantly when a new row is added to Google Sheets
+- **Smart classification** — automatically classifies employees as:
+  - 🏆 Top Performer (attendance > 90%)
+  - ✅ Normal
+  - ⚠️ Warning (absence > 30%)
+- **Instant alerts** — sends Telegram + HTML Email report for every new entry
+- **Daily summary** — automated report every day at 8:00 AM with full employee breakdown
+- **Auto logging** — logs all records to a dedicated Logs sheet
+
+---
+
+## 🔧 Requirements
+
+- [n8n](https://n8n.io/) (self-hosted or cloud)
+- Google account (Google Sheets + Gmail)
+- Telegram Bot + Chat ID
+
+---
+
+## 📋 Google Sheets Structure
+
+Your spreadsheet must contain a sheet named **`Employee Data`** with headers starting at **row 3**:
+
+| Employee Name | Date | Attendance Hours | Absence Hours | Attendance % | Absence % | Reason for Absence |
+|---|---|---|---|---|---|---|
+
+Also create two additional sheets:
+- **`Logs`** — for per-employee records
+- **`Summary`** — for daily summary records
+
+---
+
+## 🚀 Setup
+
+### 1. Import the Workflow
+- Open n8n → **Workflows** → **Import**
+- Upload `Employee_Attendance_Tracker_Template.json`
+
+### 2. Connect Your Accounts
+
+| Service | Credential Type |
+|---|---|
+| Google Sheets | Google Sheets OAuth2 API |
+| Gmail | Gmail OAuth2 |
+| Telegram | Telegram API (Bot Token) |
+
+### 3. Configure the Nodes
+
+**Google Sheets nodes:**
+- Replace `YOUR_GOOGLE_SHEET_ID` with your spreadsheet ID
+- Found in the URL: `https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit`
+
+**Gmail nodes (3 nodes):**
+- Replace `YOUR_EMAIL@gmail.com` with the recipient email
+
+**Telegram nodes (3 nodes):**
+- Replace `YOUR_TELEGRAM_CHAT_ID` with your chat or group ID
+
+### 4. Activate
+- Click the **Active** toggle → the workflow monitors your sheet automatically ✅
+
+---
+
+## 🔄 Workflow Overview
+
+```
+Google Sheets Trigger
+        │
+        ▼
+Process & Evaluate Row
+        │
+        ▼
+   Is Warning?
+   ┌────┴────┐
+  YES        NO
+   │          │
+Telegram    Telegram
+Gmail       Gmail
+Log Sheet   Log Sheet
+
+─────────────────────────
+Daily Cron (8:00 AM)
+        │
+        ▼
+  Read All Rows
+        │
+        ▼
+Build Daily Summary
+        │
+   ┌────┼────┐
+Telegram Gmail Log Sheet
+```
+
+---
+
+## 📁 Files
+
+| File | Description |
+|---|---|
+| `Employee_Attendance_Tracker_Template.json` | n8n workflow — ready to import |
+| `README.md` | This file |
+
+---
+
+## 🛠️ Built With
+
+- [n8n](https://n8n.io/) — Workflow automation
+- Google Sheets — Data source
+- Gmail — Email notifications
+- Telegram — Instant alerts
+
+---
+
+## 📄 License
+
+MIT — free to use and modify.

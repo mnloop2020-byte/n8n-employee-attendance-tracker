@@ -1,0 +1,748 @@
+{
+  "name": "Employee Attendance Tracker - Full Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Your Spreadsheet",
+          "cachedResultUrl": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1196408526,
+          "mode": "list",
+          "cachedResultName": "Employee Data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1jCZFzl547tJEv3cnC_beRuw2upmayV3VJ61vsYlLJbg/edit#gid=1196408526"
+        },
+        "event": "rowAdded",
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRange",
+              "headerRow": 3,
+              "firstDataRow": null
+            }
+          }
+        }
+      },
+      "id": "eee5ea13-898d-401f-8fbe-a386f12a0590",
+      "name": "Google Sheets Trigger",
+      "type": "n8n-nodes-base.googleSheetsTrigger",
+      "typeVersion": 1,
+      "position": [
+        -848,
+        80
+      ],
+      "credentials": {
+        "googleSheetsTriggerOAuth2Api": {
+          "id": "",
+          "name": "Google Sheets Trigger OAuth2 API"
+        }
+      },
+      "notes": "Triggers when a new row is added to 'Employee Data' sheet. Header is row 3, data starts at row 4."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══════════════════════════════════════════════════\n//  نود: Process & Evaluate Row\n// ═══════════════════════════════════════════════════\n\nconst row = $input.first().json;\n\nconst employeeName  = row['Employee Name']      || '';\nconst date          = row['Date']               || '';\nconst attendanceHrs = parseFloat(row['Attendance Hours'] || 0);\nconst absenceHrs    = parseFloat(row['Absence Hours']    || 0);\nconst reason        = row['Reason for Absence'] || 'N/A';\nconst totalHrs      = attendanceHrs + absenceHrs;\n\nlet rawAtt = parseFloat(row['Attendance %'] || 0);\nlet rawAbs = parseFloat(row['Absence %']    || 0);\nlet attendancePct = rawAtt <= 1 ? Math.round(rawAtt * 100) : Math.round(rawAtt);\nlet absencePct    = rawAbs <= 1 ? Math.round(rawAbs * 100) : Math.round(rawAbs);\n\nif (totalHrs > 0 && rawAtt === 0 && rawAbs === 0) {\n  attendancePct = Math.round((attendanceHrs / totalHrs) * 100);\n  absencePct    = Math.round((absenceHrs    / totalHrs) * 100);\n}\n\nlet status      = 'Normal';\nlet statusColor = '#185FA5';\nlet statusBg    = '#E6F1FB';\nlet statusEmoji = '✅';\n\nif (attendancePct > 90) {\n  status      = 'Top Performer';\n  statusColor = '#3B6D11';\n  statusBg    = '#EAF3DE';\n  statusEmoji = '🏆';\n} else if (absencePct > 30) {\n  status      = 'Warning';\n  statusColor = '#993C1D';\n  statusBg    = '#FAECE7';\n  statusEmoji = '⚠️';\n}\n\nif (!employeeName || !date) {\n  throw new Error('Row is missing Employee Name or Date — skipping.');\n}\n\nconst initials = employeeName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);\n\nconst telegramMessage = [\n  `━━━━━━━━━━━━━━━━━━━━━`,\n  `${statusEmoji} *ATTENDANCE REPORT*`,\n  `━━━━━━━━━━━━━━━━━━━━━`,\n  ``,\n  `👤  *${employeeName}*`,\n  `📅  ${date}`,\n  ``,\n  `⏱️  Total Hours     \\`${totalHrs}h\\``,\n  `✅  Attendance      \\`${attendancePct}%  (${attendanceHrs}h)\\``,\n  `❌  Absence         \\`${absencePct}%  (${absenceHrs}h)\\``,\n  `📌  Reason          \\`${reason}\\``,\n  ``,\n  `${statusEmoji}  Status: *${status}*`,\n  ``,\n  `━━━━━━━━━━━━━━━━━━━━━`,\n  `_n8n Attendance System_`\n].join('\\n');\n\nconst attBarWidth = Math.min(attendancePct, 100);\nconst absBarWidth = Math.min(absencePct, 100);\n\nconst emailBody = `<!DOCTYPE html>\n<html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<style>\n*{margin:0;padding:0;box-sizing:border-box}\nbody{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f4f6f9;padding:32px 16px}\n.container{max-width:600px;margin:0 auto}\n.header{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);border-radius:16px 16px 0 0;padding:32px 28px;position:relative;overflow:hidden}\n.badge{display:inline-block;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:20px;padding:4px 14px;font-size:11px;color:rgba(255,255,255,0.8);margin-bottom:18px;letter-spacing:0.04em}\n.avatar{width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,0.15);border:2px solid rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600;color:white;margin-bottom:12px}\n.emp-name{font-size:22px;font-weight:600;color:white;margin-bottom:4px}\n.emp-sub{font-size:13px;color:rgba(255,255,255,0.55)}\n.body{background:white;padding:24px 28px;border-radius:0 0 16px 16px;border:1px solid #e8ecf0;border-top:none}\n.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:24px}\n.stat{background:#f8f9fb;border-radius:10px;padding:14px;text-align:center}\n.stat-val{font-size:22px;font-weight:600;margin-bottom:2px}\n.stat-label{font-size:11px;color:#6b7280;letter-spacing:0.03em}\n.green{color:#1D9E75}.red{color:#D85A30}.blue{color:#185FA5}\n.section-label{font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px}\n.detail-row{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid #f3f4f6;font-size:14px}\n.detail-row:last-child{border-bottom:none;padding-bottom:0}\n.detail-label{color:#6b7280}\n.detail-val{font-weight:500;color:#111827}\n.status-pill{display:inline-block;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:600}\n.divider{height:1px;background:#f3f4f6;margin:20px 0}\n.bar-label{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}\n.bar-track{background:#f3f4f6;border-radius:99px;height:8px;overflow:hidden;margin-bottom:12px}\n.bar-fill{height:8px;border-radius:99px}\n.footer{text-align:center;font-size:11px;color:#9ca3af;margin-top:20px;padding-top:16px;border-top:1px solid #f3f4f6}\n</style></head>\n<body>\n<div class=\"container\">\n  <div class=\"header\">\n    <div class=\"badge\">ATTENDANCE REPORT</div>\n    <div class=\"avatar\">${initials}</div>\n    <div class=\"emp-name\">${employeeName}</div>\n    <div class=\"emp-sub\">${date}</div>\n  </div>\n  <div class=\"body\">\n    <div class=\"stats\">\n      <div class=\"stat\"><div class=\"stat-val green\">${attendancePct}%</div><div class=\"stat-label\">Attendance</div></div>\n      <div class=\"stat\"><div class=\"stat-val red\">${absencePct}%</div><div class=\"stat-label\">Absence</div></div>\n      <div class=\"stat\"><div class=\"stat-val blue\">${totalHrs}h</div><div class=\"stat-label\">Total Hours</div></div>\n    </div>\n    <div class=\"section-label\">Details</div>\n    <div class=\"detail-row\"><span class=\"detail-label\">Attendance Hours</span><span class=\"detail-val\">${attendanceHrs}h</span></div>\n    <div class=\"detail-row\"><span class=\"detail-label\">Absence Hours</span><span class=\"detail-val\">${absenceHrs}h</span></div>\n    <div class=\"detail-row\"><span class=\"detail-label\">Reason</span><span class=\"detail-val\">${reason}</span></div>\n    <div class=\"detail-row\">\n      <span class=\"detail-label\">Status</span>\n      <span class=\"status-pill\" style=\"background:${statusBg};color:${statusColor}\">${statusEmoji} ${status}</span>\n    </div>\n    <div class=\"divider\"></div>\n    <div class=\"section-label\">Breakdown</div>\n    <div class=\"bar-label\"><span style=\"color:#6b7280\">Attendance</span><span style=\"color:#1D9E75;font-weight:500\">${attendancePct}%</span></div>\n    <div class=\"bar-track\"><div class=\"bar-fill\" style=\"width:${attBarWidth}%;background:#1D9E75\"></div></div>\n    <div class=\"bar-label\"><span style=\"color:#6b7280\">Absence</span><span style=\"color:#D85A30;font-weight:500\">${absencePct}%</span></div>\n    <div class=\"bar-track\"><div class=\"bar-fill\" style=\"width:${absBarWidth}%;background:#D85A30\"></div></div>\n    <div class=\"footer\">Generated automatically by n8n · Employee Attendance System</div>\n  </div>\n</div>\n</body></html>`;\n\nreturn [{\n  json: {\n    employeeName, date, attendanceHrs, absenceHrs, totalHrs,\n    attendancePct, absencePct, reason, status, statusEmoji,\n    telegramMessage, emailBody,\n    emailSubject: `${statusEmoji} Attendance Report — ${employeeName} — ${date}`\n  }\n}];"
+      },
+      "id": "0c318655-19a2-4565-a435-c46e79fb6e65",
+      "name": "Process & Evaluate Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -624,
+        80
+      ],
+      "notes": "Calculates attendance%, absence%, determines status (Top Performer / Warning / Normal), and builds Telegram + Email messages."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond_warning",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "=Warning",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "775c1887-1f25-412a-8708-a502dea44208",
+      "name": "Is Warning?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        80
+      ],
+      "notes": "Routes Warning employees to urgent path. True = Warning, False = Normal/Top Performer."
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.telegramMessage }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "1beb89b7-eb75-46df-a39e-da8b230ebeef",
+      "name": "Telegram - Send Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -176,
+        -400
+      ],
+      "webhookId": "f21177d1-0a5e-43ea-a579-3d4c90fa7c80",
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram account"
+        }
+      },
+      "notes": "Sends instant Telegram notification for Warning employees. Replace YOUR_TELEGRAM_CHAT_ID."
+    },
+    {
+      "parameters": {
+        "sendTo": "YOUR_EMAIL@gmail.com",
+        "subject": "={{ $json.emailSubject }}",
+        "message": "={{ $json.emailBody }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "b2f83d4b-a9e4-479c-bfc5-d980e68a9440",
+      "name": "Gmail - Send Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -176,
+        -16
+      ],
+      "webhookId": "8680cf1a-7112-4727-a6eb-b7d6e06aba00",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account"
+        }
+      },
+      "notes": "Sends HTML email report. Replace YOUR_EMAIL@gmail.com with the recipient address."
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.telegramMessage }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "9cc897fa-8b33-4e9b-bd85-ce02ed2e5ced",
+      "name": "Telegram - Send Normal Report",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -176,
+        368
+      ],
+      "webhookId": "0867e7eb-9e92-43be-8e78-474e527c363f",
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram account"
+        }
+      },
+      "notes": "Sends Telegram message for Normal / Top Performer employees."
+    },
+    {
+      "parameters": {
+        "sendTo": "YOUR_EMAIL@gmail.com",
+        "subject": "={{ $json.emailSubject }}",
+        "message": "={{ $json.emailBody }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "64d9d78c-9965-48a3-92b7-1825f21f5ff0",
+      "name": "Gmail - Send Normal Report",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -176,
+        560
+      ],
+      "webhookId": "4858c808-9ef9-4449-8cbd-bfd2e7b08757",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account"
+        }
+      },
+      "notes": "Sends HTML email for Normal / Top Performer employees."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Your Spreadsheet",
+          "cachedResultUrl": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1738661680,
+          "mode": "list",
+          "cachedResultName": "Logs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1jCZFzl547tJEv3cnC_beRuw2upmayV3VJ61vsYlLJbg/edit#gid=1738661680"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Employee Name",
+              "displayName": "Employee Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Total Att. Hours",
+              "displayName": "Total Att. Hours",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Total Abs. Hours",
+              "displayName": "Total Abs. Hours",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Total Working Hours",
+              "displayName": "Total Working Hours",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Avg Attendance %",
+              "displayName": "Avg Attendance %",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Avg Absence %",
+              "displayName": "Avg Absence %",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "11699b0d-8224-4778-920d-af58dc4b6355",
+      "name": "Log to Sheet (Warning)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        48,
+        -208
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "Appends Warning records to a 'Logs' sheet. Create this sheet manually first with these column headers."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Your Spreadsheet",
+          "cachedResultUrl": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1738661680,
+          "mode": "list",
+          "cachedResultName": "Logs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1jCZFzl547tJEv3cnC_beRuw2upmayV3VJ61vsYlLJbg/edit#gid=1738661680"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {
+            "Employee Name": "={{ $json.employeeName }}",
+            "Avg Attendance %": "={{ $json.attendanceHrs }}",
+            "Avg Absence %": "={{ $json.absencePct }}",
+            "Total Working Hours": "={{ $json.totalHrs }}",
+            "Total Abs. Hours": "={{ $json.absenceHrs }}",
+            "Total Att. Hours": "={{ $json.totalHrs }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Employee Name",
+              "displayName": "Employee Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Total Att. Hours",
+              "displayName": "Total Att. Hours",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Total Abs. Hours",
+              "displayName": "Total Abs. Hours",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Total Working Hours",
+              "displayName": "Total Working Hours",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Avg Attendance %",
+              "displayName": "Avg Attendance %",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Avg Absence %",
+              "displayName": "Avg Absence %",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "cf5f37b7-fe3b-42eb-a11d-a1e8b2ae2b3d",
+      "name": "Log to Sheet (Normal)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        48,
+        176
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "Appends Normal/Top Performer records to 'Logs' sheet."
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 20
+            }
+          ]
+        }
+      },
+      "id": "743de2ce-8076-48d1-b051-b991d85d61cb",
+      "name": "Daily Cron (8:00 AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -848,
+        976
+      ],
+      "notes": "Fires every day at 8:00 AM to trigger the daily summary report. Adjust time as needed."
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Your Spreadsheet",
+          "cachedResultUrl": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1196408526,
+          "mode": "list",
+          "cachedResultName": "Employee Data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1jCZFzl547tJEv3cnC_beRuw2upmayV3VJ61vsYlLJbg/edit#gid=1196408526"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRange",
+              "headerRow": 3,
+              "firstDataRow": 3
+            }
+          }
+        }
+      },
+      "id": "00979214-bbc7-48ce-aa1c-3c0dece52fc1",
+      "name": "Read All Rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        -624,
+        976
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "Reads all rows from Employee Data sheet for daily summary analysis."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══════════════════════════════════════════════════\n//  نود: Build Daily Summary\n// ═══════════════════════════════════════════════════\n\nconst rows = $input.all();\nif (!rows || rows.length === 0) return [{ json: { skip: true } }];\n\nconst employees = {};\n\nfor (const item of rows) {\n  const r = item.json;\n  const name = r['Employee Name'] || '';\n  if (!name || name === 'Employee Name') continue;\n\n  const attHrs = parseFloat(r['Attendance Hours'] || 0);\n  const absHrs = parseFloat(r['Absence Hours']    || 0);\n  const total  = attHrs + absHrs;\n\n  if (!employees[name]) {\n    employees[name] = { name, totalAtt: 0, totalAbs: 0, totalHrs: 0 };\n  }\n\n  employees[name].totalAtt  += attHrs;\n  employees[name].totalAbs  += absHrs;\n  employees[name].totalHrs  += total;\n}\n\nconst list = Object.values(employees).filter(e => e.totalHrs > 0);\n\nlist.forEach(e => {\n  e.attPct = Math.round((e.totalAtt / e.totalHrs) * 100);\n  e.absPct = Math.round((e.totalAbs / e.totalHrs) * 100);\n  e.status = e.attPct > 90 ? '🏆 Top Performer' : e.absPct > 30 ? '⚠️ Warning' : '✅ Normal';\n});\n\nconst topPerformer  = list.reduce((a, b) => a.attPct >= b.attPct ? a : b);\nconst highestAbsent = list.reduce((a, b) => a.absPct >= b.absPct ? a : b);\nconst totalAttHrs   = list.reduce((s, e) => s + e.totalAtt, 0);\nconst totalAbsHrs   = list.reduce((s, e) => s + e.totalAbs, 0);\nconst today         = new Date().toLocaleDateString('en-GB');\n\nconst breakdown = list.map(e =>\n  `  ${e.status.split(' ')[0]}  *${e.name}*\\n     ✅ ${e.attPct}%  ❌ ${e.absPct}%  ⏱️ ${e.totalAtt}h`\n).join('\\n\\n');\n\nconst telegramSummary = [\n  `━━━━━━━━━━━━━━━━━━━━━`,\n  `📅 *DAILY SUMMARY REPORT*`,\n  `━━━━━━━━━━━━━━━━━━━━━`,\n  `📆  ${today}`,\n  ``,\n  `🏆  Top Performer`,\n  `     *${topPerformer.name}* — ${topPerformer.attPct}%`,\n  ``,\n  `⚠️  Highest Absence`,\n  `     *${highestAbsent.name}* — ${highestAbsent.absPct}%`,\n  ``,\n  `⏱️  Total Attendance   \\`${totalAttHrs}h\\``,\n  `🚫  Total Absence      \\`${totalAbsHrs}h\\``,\n  ``,\n  `━━━━━━━━━━━━━━━━━━━━━`,\n  `*Employee Breakdown:*`,\n  ``,\n  breakdown,\n  ``,\n  `━━━━━━━━━━━━━━━━━━━━━`,\n  `_n8n Attendance System_`\n].join('\\n');\n\nconst tableRows = list.map(e => {\n  const bg    = e.attPct > 90 ? '#EAF3DE' : e.absPct > 30 ? '#FAECE7' : '#E6F1FB';\n  const color = e.attPct > 90 ? '#3B6D11' : e.absPct > 30 ? '#993C1D' : '#185FA5';\n  return `<tr>\n    <td style=\"padding:12px 14px;font-weight:500;color:#111827\">${e.name}</td>\n    <td style=\"padding:12px 14px;color:#1D9E75;font-weight:500;text-align:center\">${e.attPct}%</td>\n    <td style=\"padding:12px 14px;color:#D85A30;font-weight:500;text-align:center\">${e.absPct}%</td>\n    <td style=\"padding:12px 14px;text-align:center\">${e.totalAtt}h</td>\n    <td style=\"padding:12px 14px;text-align:center\">\n      <span style=\"background:${bg};color:${color};padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600\">${e.status}</span>\n    </td>\n  </tr>`;\n}).join('');\n\nconst emailSummary = `<!DOCTYPE html>\n<html><head><meta charset=\"UTF-8\">\n<style>\n*{margin:0;padding:0;box-sizing:border-box}\nbody{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f4f6f9;padding:32px 16px}\n.container{max-width:640px;margin:0 auto}\n.header{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);border-radius:16px 16px 0 0;padding:32px 28px}\n.badge{display:inline-block;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:20px;padding:4px 14px;font-size:11px;color:rgba(255,255,255,0.8);margin-bottom:14px;letter-spacing:0.04em}\n.title{font-size:22px;font-weight:600;color:white;margin-bottom:4px}\n.sub{font-size:13px;color:rgba(255,255,255,0.55)}\n.body{background:white;padding:28px;border-radius:0 0 16px 16px;border:1px solid #e8ecf0;border-top:none}\n.highlights{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:24px}\n.hl{background:#f8f9fb;border-radius:10px;padding:14px}\n.hl-label{font-size:11px;color:#9ca3af;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em}\n.hl-val{font-size:16px;font-weight:600;color:#111827}\n.hl-sub{font-size:12px;color:#6b7280;margin-top:2px}\n.section-label{font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:14px}\ntable{width:100%;border-collapse:collapse}\nth{background:#f8f9fb;padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.04em}\ntr:nth-child(even){background:#fafafa}\n.footer{text-align:center;font-size:11px;color:#9ca3af;margin-top:20px}\n</style></head>\n<body>\n<div class=\"container\">\n  <div class=\"header\">\n    <div class=\"badge\">DAILY SUMMARY REPORT</div>\n    <div class=\"title\">Attendance Summary</div>\n    <div class=\"sub\">${today}</div>\n  </div>\n  <div class=\"body\">\n    <div class=\"highlights\">\n      <div class=\"hl\">\n        <div class=\"hl-label\">Top Performer</div>\n        <div class=\"hl-val\">🏆 ${topPerformer.name}</div>\n        <div class=\"hl-sub\">${topPerformer.attPct}% attendance</div>\n      </div>\n      <div class=\"hl\">\n        <div class=\"hl-label\">Highest Absence</div>\n        <div class=\"hl-val\">⚠️ ${highestAbsent.name}</div>\n        <div class=\"hl-sub\">${highestAbsent.absPct}% absence</div>\n      </div>\n      <div class=\"hl\">\n        <div class=\"hl-label\">Total Attendance</div>\n        <div class=\"hl-val\" style=\"color:#1D9E75\">${totalAttHrs}h</div>\n      </div>\n      <div class=\"hl\">\n        <div class=\"hl-label\">Total Absence</div>\n        <div class=\"hl-val\" style=\"color:#D85A30\">${totalAbsHrs}h</div>\n      </div>\n    </div>\n    <div class=\"section-label\">Employee Breakdown</div>\n    <table>\n      <thead><tr>\n        <th>Employee</th>\n        <th style=\"text-align:center\">Att %</th>\n        <th style=\"text-align:center\">Abs %</th>\n        <th style=\"text-align:center\">Hours</th>\n        <th style=\"text-align:center\">Status</th>\n      </tr></thead>\n      <tbody>${tableRows}</tbody>\n    </table>\n    <div class=\"footer\">Generated automatically by n8n · Employee Attendance System</div>\n  </div>\n</div>\n</body></html>`;\n\nreturn [{\n  json: {\n    today,\n    topPerformer: topPerformer.name,\n    highestAbsent: highestAbsent.name,\n    totalAttHrs,\n    totalAbsHrs,\n    telegramSummary,\n    emailSummary,\n    emailSubject: `📅 Daily Attendance Summary — ${today}`\n  }\n}];"
+      },
+      "id": "82197f17-f5f2-4e7b-9216-fc17c26aa8b8",
+      "name": "Build Daily Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        976
+      ],
+      "notes": "Aggregates all employee data, finds top performer and highest absent, builds Telegram + HTML email summary."
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.telegramSummary }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "f6cb39a0-b691-462d-8ae9-d02ca7c247f7",
+      "name": "Telegram - Daily Summary",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -176,
+        976
+      ],
+      "webhookId": "d4571f6c-c1b2-4083-872d-493f2f2404f9",
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram account"
+        }
+      },
+      "notes": "Sends the daily summary report to your Telegram channel/group."
+    },
+    {
+      "parameters": {
+        "sendTo": "YOUR_EMAIL@gmail.com",
+        "subject": "={{ $json.emailSubject }}",
+        "message": "={{ $json.emailSummary }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "9f6cd821-e29f-41e3-8175-f58623f16f7b",
+      "name": "Gmail - Daily Summary",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -176,
+        1168
+      ],
+      "webhookId": "cbb6011f-fc88-4ac0-91a7-59a33d282446",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account"
+        }
+      },
+      "notes": "Sends the daily HTML summary report via Gmail."
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Your Spreadsheet",
+          "cachedResultUrl": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1494037611,
+          "mode": "list",
+          "cachedResultName": "Summary",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1jCZFzl547tJEv3cnC_beRuw2upmayV3VJ61vsYlLJbg/edit#gid=1494037611"
+        },
+        "options": {}
+      },
+      "id": "7272a418-93e3-476a-89b9-b479b700a5f3",
+      "name": "Log Daily Summary to Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        -176,
+        784
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Google Sheets OAuth2 API"
+        }
+      },
+      "notes": "Appends daily summary to 'Summary' sheet. Create this sheet with these column headers first."
+    },
+    {
+      "parameters": {
+        "jsCode": "// يكتب في شيت Logs مباشرة عبر API\nconst data = $input.first().json;\n\nreturn [{\n  json: {\n    \"Employee Name\": data.employeeName,\n    \"Total Att. Hours\": data.attendanceHrs,\n    \"Total Abs. Hours\": data.absenceHrs,\n    \"Total Working Hours\": data.totalHrs,\n    \"Avg Attendance %\": data.attendancePct,\n    \"Avg Absence %\": data.absencePct,\n    \"Status\": data.status,\n    \"Logged At\": new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -176,
+        -208
+      ],
+      "id": "0fd25ad8-a386-4655-a05e-5c9300a18c76",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\n\nreturn [{\n  json: {\n    \"Employee Name\":       d.employeeName,\n    \"Total Att. Hours\":    d.attendanceHrs,\n    \"Total Abs. Hours\":    d.absenceHrs,\n    \"Total Working Hours\": d.totalHrs,\n    \"Avg Attendance %\":    d.attendancePct,\n    \"Avg Absence %\":       d.absencePct,\n    \"Status\":              d.status,\n    \"Logged At\":           new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -176,
+        176
+      ],
+      "id": "1b962581-6bb8-4e1d-b3b5-bc5a7f2d349e",
+      "name": "Code in JavaScript1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Sheets Trigger": {
+      "main": [
+        [
+          {
+            "node": "Process & Evaluate Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process & Evaluate Row": {
+      "main": [
+        [
+          {
+            "node": "Is Warning?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Warning?": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Send Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Gmail - Send Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram - Send Normal Report",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Gmail - Send Normal Report",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Cron (8:00 AM)": {
+      "main": [
+        [
+          {
+            "node": "Read All Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read All Rows": {
+      "main": [
+        [
+          {
+            "node": "Build Daily Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Daily Summary": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Daily Summary",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Gmail - Daily Summary",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Daily Summary to Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Log to Sheet (Warning)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to Sheet (Normal)": {
+      "main": [
+        []
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Log to Sheet (Normal)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - Daily Summary": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "87e9dbce-bf87-4990-9f86-19d23714bfac",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": ""
+  },
+  "id": "p6H720ADUZfmyQiL",
+  "tags": []
+}
